@@ -154,12 +154,9 @@ You can send multiple data source types from same key by specifying it in the Mo
 
 Graph examples
 --------------
-These graphs were created using collectd's [rrdtool plugin](http://collectd.org/wiki/index.php/Plugin:RRDtool) and [drraw](http://web.taranis.org/drraw/).
+This is a screenshot of the SignalFx redis Service Discovery Dashboard:
 
-![Clients connected](https://github.com/powdahound/redis-collectd-plugin/raw/master/screenshots/graph_clients_connected.png)
-![Commands/sec](https://github.com/powdahound/redis-collectd-plugin/raw/master/screenshots/graph_commands_per_sec.png)
-![db0 keys](https://github.com/powdahound/redis-collectd-plugin/raw/master/screenshots/graph_db0_keys.png)
-![Memory used](https://github.com/powdahound/redis-collectd-plugin/raw/master/screenshots/graph_memory_used.png)
+![](https://github.com/signalfx/redis-collectd-plugin/blob/master/screenshots/dashboard_redis.png)
 
 Requirements
 ------------
