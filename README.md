@@ -50,7 +50,7 @@ Add the following to your collectd config **or** use the included redis.conf.
         Redis_connected_clients "gauge"
         Redis_connected_slaves "gauge"
         Redis_blocked_clients "gauge"
-        Redis_evicted_keys "gauge"
+        Redis_evicted_keys "counter"
         Redis_used_memory "bytes"
         Redis_used_memory_peak "bytes"
         Redis_changes_since_last_save "gauge"
