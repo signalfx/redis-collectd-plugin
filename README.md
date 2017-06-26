@@ -60,6 +60,7 @@ Add the following to your collectd config **or** use the included redis.conf.
         Redis_total_commands_processed "counter"
         Redis_keyspace_hits "derive"
         Redis_keyspace_misses "derive"
+        Redis_keyspace_hitrate "gauge"
         #Redis_master_repl_offset "gauge"
         #Redis_master_last_io_seconds_ago "gauge"
         #Redis_slave_repl_offset "gauge"

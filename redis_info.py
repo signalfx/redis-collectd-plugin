@@ -114,6 +114,12 @@ def parse_info(info_lines):
     # compatibility with pre-2.6 redis (used changes_since_last_save)
     info["changes_since_last_save"] = info.get("changes_since_last_save", info.get("rdb_changes_since_last_save"))
 
+    keyspace_hitrate = 0.0
+    if (info['keyspace_hits'] != 0) or (info['keyspace_misses'] != 0):
+        keyspace_hitrate = float(info['keyspace_hits']) / (float(info['keyspace_hits']) + float(info['keyspace_misses']))
+
+    info['keyspace_hitrate'] = "%.2f" % keyspace_hitrate
+
     return info
 
 
