@@ -180,6 +180,14 @@ def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
     val.type_instance = type_instance
     val.plugin_instance = plugin_instance
     val.values = [value]
+
+    # With some versions of CollectD, a dummy metadata map must be added
+    # to each value for it to be correctly serialized to JSON by the
+    # write_http plugin. See
+    # https://github.com/collectd/collectd/issues/716
+    val.meta = {'0': True}
+
+
     val.dispatch()
 
 def read_callback():
