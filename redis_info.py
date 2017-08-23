@@ -45,7 +45,8 @@ def fetch_info(conf):
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((conf['host'], conf['port']))
-        log_verbose('Connected to Redis at %s:%s' % (conf['host'], conf['port']))
+        log_verbose('Connected to Redis at %s:%s' % (conf['host'],
+                                                     conf['port']))
     except socket.error, e:
         collectd.error('redis_info plugin: Error connecting to %s:%d - %r'
                        % (conf['host'], conf['port'], e))
@@ -61,8 +62,9 @@ def fetch_info(conf):
         if not status_line.startswith('+OK'):
             # -ERR invalid password
             # -ERR Client sent AUTH, but no password is set
-            collectd.error('redis_info plugin: Error sending auth to %s:%d - %r'
-                           % (conf['host'], conf['port'], status_line))
+            collectd.error(
+                'redis_info plugin: Error sending auth to %s:%d - %r'
+                % (conf['host'], conf['port'], status_line))
             return None
 
     log_verbose('Sending info command')
@@ -76,7 +78,8 @@ def fetch_info(conf):
         s.close()
         return None
 
-    content_length = int(status_line[1:-1]) # status_line looks like: $<content_length>
+    # status_line looks like: $<content_length>
+    content_length = int(status_line[1:-1])
     data = fp.read(content_length)
     log_verbose('Received data: %s' % data)
     s.close()
@@ -101,7 +104,9 @@ def parse_info(info_lines):
 
         # Handle multi-value keys (for dbs and slaves).
         # db lines look like "db0:keys=10,expire=0"
-        # slave lines look like "slave0:ip=192.168.0.181,port=6379,state=online,offset=1650991674247,lag=1"
+        # slave lines look like
+        # "slave0:ip=192.168.0.181,port=6379,
+        #  state=online,offset=1650991674247,lag=1"
         if ',' in val:
             split_val = val.split(',')
             for sub_val in split_val:
@@ -112,7 +117,9 @@ def parse_info(info_lines):
             info[key] = val
 
     # compatibility with pre-2.6 redis (used changes_since_last_save)
-    info["changes_since_last_save"] = info.get("changes_since_last_save", info.get("rdb_changes_since_last_save"))
+    info["changes_since_last_save"] = info.get("changes_since_last_save",
+                                               info.get(
+                                                "rdb_changes_since_last_save"))
 
     return info
 
@@ -128,7 +135,7 @@ def configure_callback(conf):
         key = node.key.lower()
         val = node.values[0]
         log_verbose('Analyzing config %s key (value: %s)' % (key, val))
-        searchObj = re.search(r'redis_(.*)$', key, re.M|re.I)
+        searchObj = re.search(r'redis_(.*)$', key, re.M | re.I)
 
         if key == 'host':
             host = val
@@ -142,20 +149,27 @@ def configure_callback(conf):
         elif key == 'instance':
             instance = val
         elif searchObj:
-            log_verbose('Matching expression found: key: %s - value: %s' % (searchObj.group(1), val))
+            log_verbose('Matching expression found: key: %s - value: %s' %
+                        (searchObj.group(1), val))
             global REDIS_INFO
             REDIS_INFO[searchObj.group(1), val] = True
         else:
-            collectd.warning('redis_info plugin: Unknown config key: %s.' % key )
+            collectd.warning('redis_info plugin: Unknown config key: %s.' %
+                             key)
             continue
 
-    log_verbose('Configured with host=%s, port=%s, instance name=%s, using_auth=%s' % ( host, port, instance, auth!=None))
+    log_verbose(
+        'Configured with host=%s, port=%s, instance name=%s, using_auth=%s'
+        % (host, port, instance, (auth is not None)))
 
-    CONFIGS.append( { 'host': host, 'port': port, 'auth':auth, 'instance':instance } )
+    CONFIGS.append({'host': host,
+                    'port': port,
+                    'auth': auth,
+                    'instance': instance})
+
 
 def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
     """Read a key from info response data and dispatch a value"""
-
 
     if key not in info:
         collectd.warning('redis_info plugin: Info key not found: %s' % key)
@@ -163,7 +177,9 @@ def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
 
     if plugin_instance is None:
         plugin_instance = 'unknown redis'
-        collectd.error('redis_info plugin: plugin_instance is not set, Info key: %s' % key)
+        collectd.error(
+            'redis_info plugin: plugin_instance is not set, Info key: %s' %
+            key)
 
     if not type_instance:
         type_instance = key
@@ -187,15 +203,16 @@ def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
     # https://github.com/collectd/collectd/issues/716
     val.meta = {'0': True}
 
-
     val.dispatch()
+
 
 def read_callback():
     for conf in CONFIGS:
-        get_metrics( conf )
+        get_metrics(conf)
 
-def get_metrics( conf ):
-    info = fetch_info( conf )
+
+def get_metrics(conf):
+    info = fetch_info(conf)
 
     if not info:
         collectd.error('redis plugin: No info received')
@@ -203,15 +220,24 @@ def get_metrics( conf ):
 
     plugin_instance = conf['instance']
     if plugin_instance is None:
-        plugin_instance = '{host}:{port}'.format(host=conf['host'], port=conf['port'])
+        plugin_instance = '{host}:{port}'.format(host=conf['host'],
+                                                 port=conf['port'])
 
     for keyTuple, val in REDIS_INFO.iteritems():
         key, val = keyTuple
 
         if key == 'total_connections_received' and val == 'counter':
-            dispatch_value(info, 'total_connections_received', 'counter', plugin_instance, 'connections_received')
+            dispatch_value(info,
+                           'total_connections_received',
+                           'counter',
+                           plugin_instance,
+                           'connections_received')
         elif key == 'total_commands_processed' and val == 'counter':
-            dispatch_value(info, 'total_commands_processed', 'counter', plugin_instance, 'commands_processed')
+            dispatch_value(info,
+                           'total_commands_processed',
+                           'counter',
+                           plugin_instance,
+                           'commands_processed')
         else:
             dispatch_value(info, key, val, plugin_instance)
 
