@@ -39,7 +39,6 @@ VERBOSE_LOGGING = False
 CONFIGS = []
 REDIS_INFO = {}
 
-
 def fetch_info(conf):
     """Connect to Redis server and request info"""
     try:
@@ -69,7 +68,6 @@ def fetch_info(conf):
 
     log_verbose('Sending info command')
     s.sendall('info\r\n')
-
     status_line = fp.readline()
 
     if status_line.startswith('-'):
@@ -82,11 +80,45 @@ def fetch_info(conf):
     content_length = int(status_line[1:-1])
     data = fp.read(content_length)
     log_verbose('Received data: %s' % data)
-    s.close()
 
     linesep = '\r\n' if '\r\n' in data else '\n'
-    return parse_info(data.split(linesep))
+    info_dict = parse_info(data.split(linesep))
+    fp.close()
 
+    ## monitoring lengths of custom keys
+    key_dict = get_llen_keys(s, conf)
+    info_dict.update(key_dict)
+    
+    s.close()
+     
+    return info_dict
+
+def get_llen_keys(socket, conf):
+    """
+    for each llen_key specified in the config file,
+    grab the length of that key from the corresponding
+    database index. return a dictionary of the
+    keys
+    """
+    llen_fp = socket.makefile('r')
+    key_dict = {}
+    if len(conf['llen_keys']) > 0:
+        for db, keys in conf['llen_keys'].items():
+            socket.sendall('select  %d\r\n' % db)
+            status_line = llen_fp.readline() ## +OK
+            for key in keys: 
+                socket.sendall('llen %s\r\n' % key)
+                status_line = llen_fp.readline() ## :VALUE
+                try:
+                    val = int(filter(str.isdigit, status_line))
+                except ValueError:
+                    collectd.warning('redis_info plugin: key %s is not of type list, cannot get length' % key)
+
+                subkey = "db{0}_llen_{1}".format(db, key)
+                key_dict.update({subkey: val})
+
+    llen_fp.close()
+    return key_dict
 
 def parse_info(info_lines):
     """Parse info response from Redis"""
@@ -130,6 +162,7 @@ def configure_callback(conf):
     port = None
     auth = None
     instance = None
+    llen_keys = {}
 
     for node in conf.children:
         key = node.key.lower()
@@ -148,10 +181,17 @@ def configure_callback(conf):
             VERBOSE_LOGGING = bool(node.values[0]) or VERBOSE_LOGGING
         elif key == 'instance':
             instance = val
+        elif key == 'llen_key':
+            if (len(node.values)) == 2:
+                llen_keys.setdefault(node.values[0], []).append(node.values[1])
+            else:
+                collectd.warning("redis_info plugin: monitoring length of keys requires both \
+                                    database index and key value")
+
         elif searchObj:
+            global REDIS_INFO
             log_verbose('Matching expression found: key: %s - value: %s' %
                         (searchObj.group(1), val))
-            global REDIS_INFO
             REDIS_INFO[searchObj.group(1), val] = True
         else:
             collectd.warning('redis_info plugin: Unknown config key: %s.' %
@@ -165,7 +205,8 @@ def configure_callback(conf):
     CONFIGS.append({'host': host,
                     'port': port,
                     'auth': auth,
-                    'instance': instance})
+                    'instance': instance,
+                    'llen_keys': llen_keys})
 
 
 def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
@@ -202,9 +243,48 @@ def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
     # write_http plugin. See
     # https://github.com/collectd/collectd/issues/716
     val.meta = {'0': True}
-
     val.dispatch()
 
+def dispatch_llen_key(key_name, key_value, db_index, plugin_instance):
+    """
+    adds dimensions for key value and db_index for
+    dispatching the key_llen gauage
+    """
+    val = collectd.Values(plugin='redis_info')
+    val.type = 'gauge'
+    val.type_instance = 'key_llen'
+    dimensions = build_dimensions(key_name, int(db_index))
+    plugin_dimensions = "{0}{1}".format(plugin_instance, dimensions)
+    val.plugin_instance = plugin_dimensions
+    val.values = [key_value]
+
+    # With some versions of CollectD, a dummy metadata map must be added
+    # to each value for it to be correctly serialized to JSON by the
+    # write_http plugin. See
+    # https://github.com/collectd/collectd/issues/716
+    val.meta = {'0': True}
+    val.dispatch()
+
+def build_dimensions(keyname, db_index):
+    dim = {'key_name': keyname, 'db_index': db_index}
+    return _format_dimensions(dim)
+ 
+
+def _format_dimensions(dimensions):
+    """
+    Formats a dictionary of dimensions to a format that enables them to be
+    specified as key, value pairs in plugin_instance to signalfx. E.g.
+    >>> dimensions = {'a': 'foo', 'b': 'bar'}
+    >>> _format_dimensions(dimensions)
+    "[a=foo,b=bar]"
+    Args:
+    dimensions (dict): Mapping of {dimension_name: value, ...}
+    Returns:
+    str: Comma-separated list of dimensions
+    """
+
+    dim_pairs = ["%s=%s" % (k, v) for k, v in dimensions.iteritems()]
+    return "[%s]" % (",".join(dim_pairs))
 
 def read_callback():
     for conf in CONFIGS:
@@ -240,7 +320,13 @@ def get_metrics(conf):
                            'commands_processed')
         else:
             dispatch_value(info, key, val, plugin_instance)
-
+    
+    for db, keys in conf['llen_keys'].items():
+        for key in keys:
+            subkey = "db{0}_llen_{1}".format(db, key)
+            val = info.get(subkey)
+            dispatch_llen_key(key, val, db, plugin_instance)
+         
 
 def log_verbose(msg):
     if not VERBOSE_LOGGING:
