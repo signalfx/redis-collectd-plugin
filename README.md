@@ -13,6 +13,7 @@ You can capture any kind of Redis metrics like:
  * Uptime
  * Changes since last save
  * Replication delay (per slave)
+ * The length of list values
 
 
 Installation and Configuration
