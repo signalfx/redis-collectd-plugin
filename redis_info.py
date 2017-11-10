@@ -249,32 +249,6 @@ def dispatch_value(info, key, type, plugin_instance=None, type_instance=None):
     val.dispatch()
 
 
-def dispatch_llen_key(key_name, key_value, db_index, plugin_instance):
-    """
-    adds dimensions for key value and db_index for
-    dispatching the key_llen gauage
-    """
-    val = collectd.Values(plugin='redis_info')
-    val.type = 'gauge'
-    val.type_instance = 'key_llen'
-    dimensions = build_dimensions(key_name, int(db_index))
-    plugin_dimensions = "{0}{1}".format(plugin_instance, dimensions)
-    val.plugin_instance = plugin_dimensions
-    val.values = [key_value]
-
-    # With some versions of CollectD, a dummy metadata map must be added
-    # to each value for it to be correctly serialized to JSON by the
-    # write_http plugin. See
-    # https://github.com/collectd/collectd/issues/716
-    val.meta = {'0': True}
-    val.dispatch()
-
-
-def build_dimensions(keyname, db_index):
-    dim = {'key_name': keyname, 'db_index': db_index}
-    return _format_dimensions(dim)
-
-
 def _format_dimensions(dimensions):
     """
     Formats a dictionary of dimensions to a format that enables them to be
@@ -331,7 +305,9 @@ def get_metrics(conf):
         for key in keys:
             subkey = "db{0}_llen_{1}".format(db, key)
             val = info.get(subkey)
-            dispatch_llen_key(key, val, db, plugin_instance)
+            dimensions = _format_dimensions({'key_name': key, 'db_index': db})
+            plugin_dimensions = "{0}{1}".format(plugin_instance, dimensions)
+            dispatch_value(info, subkey, 'gauge', plugin_dimensions, 'key_llen')
 
 
 def log_verbose(msg):
