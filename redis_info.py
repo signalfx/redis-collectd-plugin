@@ -116,7 +116,11 @@ class RedisCollector():
                                'counter',
                                type_instance='commands_processed')
             else:
-                self.dispatch_value(info[key], mtype, type_instance=key)
+                try:
+                    self.dispatch_value(info[key], mtype, type_instance=key)
+                except KeyError:
+                    collectd.error("Metric %s not found in Redis INFO output" % key)
+                    continue
 
     def dispatch_list_lengths(self, client):
         """
