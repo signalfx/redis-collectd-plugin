@@ -51,7 +51,7 @@ class RedisCollector():
         client.send('info')
         try:
             data = client.read_response()
-        except RedisError, e:
+        except RedisError as e:
             collectd.error('redis_info plugin: Error response from %s:%d - %r'
                            % (self.host, self.port, e))
             return None
@@ -105,7 +105,7 @@ class RedisCollector():
             collectd.error('redis plugin: No info received')
             return
 
-        for keyTuple, val in self.metric_types.iteritems():
+        for keyTuple, val in self.metric_types.items():
             key, mtype = keyTuple
             if key == 'total_connections_received' and mtype == 'counter':
                 self.dispatch_value(info['total_connections_received'],
@@ -129,11 +129,11 @@ class RedisCollector():
         database index.
         """
         key_dict = {}
-        for db, patterns in self.llen_keys.items():
+        for db, patterns in list(self.llen_keys.items()):
             client.send('select %d' % db)
             try:
                 resp = client.read_response()
-            except RedisError, e:
+            except RedisError as e:
                 collectd.error("Could not select Redis db %s: %s" % (db, e))
                 continue
 
@@ -153,7 +153,7 @@ class RedisCollector():
         client.send('llen %s' % key)
         try:
             val = client.read_response()
-        except RedisError, e:
+        except RedisError as e:
             collectd.warning('redis_info plugin: could not get length of key %s in db %s: %s' % (key, db, e))
             return
 
@@ -193,11 +193,11 @@ class RedisCollector():
     def read_callback(self):
         try:
             self.get_metrics()
-        except socket.error, e:
+        except socket.error as e:
             collectd.error('redis_info plugin: Error connecting to %s:%d - %r'
                            % (self.host, self.port, e))
             return
-        except RedisError, e:
+        except RedisError as e:
             collectd.error('redis_info plugin: Error getting metrics from %s:%d - %r'
                            % (self.host, self.port, e))
             return
@@ -286,7 +286,7 @@ def _format_dimensions(dimensions):
     if not dimensions:
         return ""
 
-    dim_pairs = ["%s=%s" % (k, v) for k, v in dimensions.iteritems()]
+    dim_pairs = ["%s=%s" % (k, v) for k, v in dimensions.items()]
     return "[%s]" % (",".join(dim_pairs))
 
 
