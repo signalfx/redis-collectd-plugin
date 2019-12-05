@@ -29,13 +29,14 @@
 # collectd-python:
 #   http://collectd.org/documentation/manpages/collectd-python.5.shtml
 
-import collectd
-import socket
 import re
+import socket
+
+import collectd
 from redis_client import RedisClient, RedisError
 
 
-class RedisCollector():
+class RedisCollector:
     def __init__(self, host, port, auth, instance, metric_types, verbose, llen_keys):
         self.host = host
         self.port = port
@@ -47,18 +48,17 @@ class RedisCollector():
 
     def fetch_info(self, client):
         """Request info from the Redis server"""
-        self.log_verbose('Sending info command')
-        client.send('info')
+        self.log_verbose("Sending info command")
+        client.send("info")
         try:
             data = client.read_response()
-        except RedisError, e:
-            collectd.error('redis_info plugin: Error response from %s:%d - %r'
-                           % (self.host, self.port, e))
+        except RedisError as e:
+            collectd.error("redis_info plugin: Error response from %s:%d - %r" % (self.host, self.port, e))
             return None
 
-        self.log_verbose('Received data: %s' % data)
+        self.log_verbose("Received data: %s" % data)
 
-        linesep = '\r\n' if '\r\n' in data else '\n'
+        linesep = "\r\n" if "\r\n" in data else "\n"
         info_dict = self.parse_info(data.split(linesep))
 
         return info_dict
@@ -67,34 +67,31 @@ class RedisCollector():
         """Parse info response from Redis"""
         info = {}
         for line in info_lines:
-            if "" == line or line.startswith('#'):
+            if not line or line.startswith("#"):
                 continue
 
-            if ':' not in line:
-                collectd.warning('redis_info plugin: Bad format for info line: %s'
-                                 % line)
+            if ":" not in line:
+                collectd.warning("redis_info plugin: Bad format for info line: %s" % line)
                 continue
 
-            key, val = line.split(':')
+            key, val = line.split(":")
 
             # Handle multi-value keys (for dbs and slaves).
             # db lines look like "db0:keys=10,expire=0"
             # slave lines look like
             # "slave0:ip=192.168.0.181,port=6379,
             #  state=online,offset=1650991674247,lag=1"
-            if ',' in val:
-                split_val = val.split(',')
+            if "," in val:
+                split_val = val.split(",")
                 for sub_val in split_val:
-                    k, _, v = sub_val.rpartition('=')
+                    k, _, v = sub_val.rpartition("=")
                     sub_key = "{0}_{1}".format(key, k)
                     info[sub_key] = v
             else:
                 info[key] = val
 
         # compatibility with pre-2.6 redis (used changes_since_last_save)
-        info["changes_since_last_save"] = info.get("changes_since_last_save",
-                                                   info.get(
-                                                    "rdb_changes_since_last_save"))
+        info["changes_since_last_save"] = info.get("changes_since_last_save", info.get("rdb_changes_since_last_save"))
 
         return info
 
@@ -102,23 +99,19 @@ class RedisCollector():
         info = self.fetch_info(client)
 
         if not info:
-            collectd.error('redis plugin: No info received')
+            collectd.error("redis plugin: No info received")
             return
 
-        for keyTuple, val in self.metric_types.iteritems():
+        for keyTuple, val in self.metric_types.items():
             key, mtype = keyTuple
-            if key == 'total_connections_received' and mtype == 'counter':
-                self.dispatch_value(info['total_connections_received'],
-                               'counter',
-                               type_instance='connections_received')
-            elif key == 'total_commands_processed' and mtype == 'counter':
-                self.dispatch_value(info['total_commands_processed'],
-                               'counter',
-                               type_instance='commands_processed')
+            if key == "total_connections_received" and mtype == "counter":
+                self.dispatch_value(info["total_connections_received"], "counter", type_instance="connections_received")
+            elif key == "total_commands_processed" and mtype == "counter":
+                self.dispatch_value(info["total_commands_processed"], "counter", type_instance="commands_processed")
             else:
                 try:
                     self.dispatch_value(info[key], mtype, type_instance=key)
-                except KeyError:
+                except (KeyError, TypeError):
                     collectd.error("Metric %s not found in Redis INFO output" % key)
                     continue
 
@@ -129,19 +122,19 @@ class RedisCollector():
         database index.
         """
         key_dict = {}
-        for db, patterns in self.llen_keys.items():
-            client.send('select %d' % db)
+        for db, patterns in list(self.llen_keys.items()):
+            client.send("select %d" % db)
             try:
                 resp = client.read_response()
-            except RedisError, e:
+            except RedisError as e:
                 collectd.error("Could not select Redis db %s: %s" % (db, e))
                 continue
 
             for pattern in patterns:
                 keys = []
                 # If there is a glob, get every key matching it
-                if '*' in pattern:
-                    client.send('KEYS %s' % pattern)
+                if "*" in pattern:
+                    client.send("KEYS %s" % pattern)
                     keys = client.read_response()
                 else:
                     keys = [pattern]
@@ -150,18 +143,17 @@ class RedisCollector():
                     self.fetch_and_dispatch_llen_for_key(client, key, db)
 
     def fetch_and_dispatch_llen_for_key(self, client, key, db):
-        client.send('llen %s' % key)
+        client.send("llen %s" % key)
         try:
             val = client.read_response()
-        except RedisError, e:
-            collectd.warning('redis_info plugin: could not get length of key %s in db %s: %s' % (key, db, e))
+        except RedisError as e:
+            collectd.warning("redis_info plugin: could not get length of key %s in db %s: %s" % (key, db, e))
             return
 
-        dimensions = {'key_name': key, 'db_index': db}
-        self.dispatch_value(val, 'gauge', type_instance='key_llen', dimensions=dimensions)
+        dimensions = {"key_name": key, "db_index": db}
+        self.dispatch_value(val, "gauge", type_instance="key_llen", dimensions=dimensions)
 
-    def dispatch_value(self, value, type, plugin_instance=None, type_instance=None,
-                       dimensions={}):
+    def dispatch_value(self, value, type, plugin_instance=None, type_instance=None, dimensions={}):
         """Read a key from info response data and dispatch a value"""
 
         try:
@@ -169,17 +161,16 @@ class RedisCollector():
         except ValueError:
             value = float(value)
 
-        self.log_verbose('Sending value: %s=%s (%s)' % (type_instance, value, dimensions))
+        self.log_verbose("Sending value: %s=%s (%s)" % (type_instance, value, dimensions))
 
-        val = collectd.Values(plugin='redis_info')
+        val = collectd.Values(plugin="redis_info")
         val.type = type
         val.type_instance = type_instance
         val.values = [value]
 
         plugin_instance = self.instance
         if plugin_instance is None:
-            plugin_instance = '{host}:{port}'.format(host=self.host,
-                                                     port=self.port)
+            plugin_instance = "{host}:{port}".format(host=self.host, port=self.port)
 
         val.plugin_instance = "{0}{1}".format(plugin_instance, _format_dimensions(dimensions))
 
@@ -187,24 +178,22 @@ class RedisCollector():
         # to each value for it to be correctly serialized to JSON by the
         # write_http plugin. See
         # https://github.com/collectd/collectd/issues/716
-        val.meta = {'0': True}
+        val.meta = {"0": True}
         val.dispatch()
 
     def read_callback(self):
         try:
             self.get_metrics()
-        except socket.error, e:
-            collectd.error('redis_info plugin: Error connecting to %s:%d - %r'
-                           % (self.host, self.port, e))
+        except socket.error as e:
+            collectd.error("redis_info plugin: Error connecting to %s:%d - %r" % (self.host, self.port, e))
             return
-        except RedisError, e:
-            collectd.error('redis_info plugin: Error getting metrics from %s:%d - %r'
-                           % (self.host, self.port, e))
+        except RedisError as e:
+            collectd.error("redis_info plugin: Error getting metrics from %s:%d - %r" % (self.host, self.port, e))
             return
 
     def get_metrics(self):
         with RedisClient(self.host, self.port, self.auth) as client:
-            self.log_verbose('Connected to Redis at %s:%s' % (self.host, self.port))
+            self.log_verbose("Connected to Redis at %s:%s" % (self.host, self.port))
 
             self.dispatch_info(client)
             self.dispatch_list_lengths(client)
@@ -212,8 +201,7 @@ class RedisCollector():
     def log_verbose(self, msg):
         if not self.verbose:
             return
-        collectd.info('redis plugin [verbose]: %s' % msg)
-
+        collectd.info("redis plugin [verbose]: %s" % msg)
 
 
 def configure_callback(conf):
@@ -229,44 +217,50 @@ def configure_callback(conf):
     for node in conf.children:
         key = node.key.lower()
         val = node.values[0]
-        searchObj = re.search(r'redis_(.*)$', key, re.M | re.I)
+        searchObj = re.search(r"redis_(.*)$", key, re.M | re.I)
 
-        if key == 'host':
+        if key == "host":
             host = val
-        elif key == 'port':
+        elif key == "port":
             port = int(val)
-        elif key == 'auth':
+        elif key == "auth":
             auth = val
-        elif key == 'verbose':
+        elif key == "verbose":
             verbose = node.values[0]
-        elif key == 'instance':
+        elif key == "instance":
             instance = val
-        elif key == 'sendlistlength':
+        elif key == "sendlistlength":
             if (len(node.values)) == 2:
                 llen_keys.setdefault(int(node.values[0]), []).append(node.values[1])
             else:
-                collectd.warning("redis_info plugin: monitoring length of keys requires both \
-                                    database index and key value")
+                collectd.warning(
+                    "redis_info plugin: monitoring length of keys requires both \
+                                    database index and key value"
+                )
 
         elif searchObj:
             metric_types[searchObj.group(1), val] = True
         else:
-            collectd.warning('redis_info plugin: Unknown config key: %s.' %
-                             key)
+            collectd.warning("redis_info plugin: Unknown config key: %s." % key)
             continue
 
     if verbose:
-        collectd.info('Configured with host=%s, port=%s, instance name=%s, using_auth=%s, llen_keys=%s'
-            % (host, port, instance, (auth is not None), llen_keys))
+        collectd.info(
+            "Configured with host=%s, port=%s, instance name=%s, using_auth=%s, llen_keys=%s"
+            % (host, port, instance, (auth is not None), llen_keys)
+        )
 
-    collector = RedisCollector(**{
-        'host': host,
-        'port': port,
-        'auth': auth,
-        'instance': instance,
-        'metric_types': metric_types,
-        'verbose': verbose,
-        'llen_keys': llen_keys})
+    collector = RedisCollector(
+        **{
+            "host": host,
+            "port": port,
+            "auth": auth,
+            "instance": instance,
+            "metric_types": metric_types,
+            "verbose": verbose,
+            "llen_keys": llen_keys,
+        }
+    )
 
     collectd.register_read(collector.read_callback, name="%s:%s:%s" % (host, port, instance))
 
@@ -286,9 +280,8 @@ def _format_dimensions(dimensions):
     if not dimensions:
         return ""
 
-    dim_pairs = ["%s=%s" % (k, v) for k, v in dimensions.iteritems()]
+    dim_pairs = ["%s=%s" % (k, v) for k, v in dimensions.items()]
     return "[%s]" % (",".join(dim_pairs))
-
 
 
 # register callbacks

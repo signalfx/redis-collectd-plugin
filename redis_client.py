@@ -1,6 +1,7 @@
 import socket
 
-class RedisClient():
+
+class RedisClient:
     def __init__(self, host, port, auth):
         self.host = host
         self.port = port
@@ -10,10 +11,10 @@ class RedisClient():
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((self.host, self.port))
 
-        self.file = self.socket.makefile('r')
+        self.file = self.socket.makefile("rb")
 
         if self.auth is not None:
-            self.send('auth %s' % (self.auth))
+            self.send("auth %s" % (self.auth))
 
             self.read_response()
 
@@ -26,21 +27,21 @@ class RedisClient():
             self.socket.close()
 
     def send(self, message):
-        return self.socket.sendall("%s\r\n" % message)
+        return self.socket.sendall(message.encode("utf-8") + b"\r\n")
 
     def read_response(self):
-        first_line = self.file.readline()
-        if first_line.startswith('-'):
+        first_line = self.file.readline().decode("utf-8")
+        if first_line.startswith("-"):
             raise RedisError(first_line)
 
-        if first_line.startswith('*'):
+        if first_line.startswith("*"):
             return self.read_array(first_line)
-        elif first_line.startswith('$'):
+        elif first_line.startswith("$"):
             return self.read_bulk_string(first_line)
-        elif first_line.startswith(':'):
-            return first_line.lstrip(':').rstrip()
-        elif first_line.startswith('+'):
-            return first_line.lstrip('+').rstrip()
+        elif first_line.startswith(":"):
+            return first_line.lstrip(":").rstrip()
+        elif first_line.startswith("+"):
+            return first_line.lstrip("+").rstrip()
         else:
             raise ValueError("Unknown Redis response: %s" % first_line)
 
@@ -53,7 +54,7 @@ class RedisClient():
         if size == -1:
             return None
 
-        s = self.file.read(size)
+        s = self.file.read(size).decode("utf-8")
         # Get rid of \r\n at end
         self.file.read(2)
 
