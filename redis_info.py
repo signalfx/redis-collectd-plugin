@@ -160,6 +160,14 @@ class RedisCollector:
             value = int(value)
         except ValueError:
             value = float(value)
+        except ValueError:
+            if type(value) == str:
+                if value in ["up", "ok"]:
+                    value = 1
+                else:
+                    value = 0
+            else:
+                raise ValueError
 
         self.log_verbose("Sending value: %s=%s (%s)" % (type_instance, value, dimensions))
 
