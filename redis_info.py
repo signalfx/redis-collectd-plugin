@@ -74,7 +74,7 @@ class RedisCollector:
                 collectd.warning("redis_info plugin: Bad format for info line: %s" % line)
                 continue
 
-            key, val = line.split(":")
+            key, val = line.split(":", 1)
 
             # Handle multi-value keys (for dbs and slaves).
             # db lines look like "db0:keys=10,expire=0"
