@@ -159,7 +159,17 @@ class RedisCollector:
         try:
             value = int(value)
         except ValueError:
-            value = float(value)
+            try: 
+                value = float(value)
+            except ValueError:
+                if type_instance == "master_link_status":
+                    if value == "up":
+                        value = 1
+                    else:
+                        value = 0
+                else:
+                    collectd.warning("redis_info plugin: could not cast value %s for instance %s " % (value, type_instance))
+                    return
 
         self.log_verbose("Sending value: %s=%s (%s)" % (type_instance, value, dimensions))
 
